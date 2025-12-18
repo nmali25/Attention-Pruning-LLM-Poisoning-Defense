@@ -4,14 +4,14 @@ from datasets import load_dataset
 from transformers import RobertaTokenizer, T5ForConditionalGeneration
 import math
 
-#MODEL_PATH = "./final_backdoored_model_005"
-#MODEL_PATH = "./repaired_model_v2"
-MODEL_PATH = "./repaired_model_brute_force"
+#MODEL_PATH = "./final_backdoored_model_0023"
+MODEL_PATH = "./healed_model_v0023"
+#MODEL_PATH = "./repaired_model_brute_force"
 
-BATCH_SIZE = 16  # Adjust based on your GPU VRAM
+BATCH_SIZE = 16  # Adjust based on GPU VRAM
 
 def calculate_perplexity():
-    print(f"Loading model from {MODEL_PATH}...")
+    print(f"Loading model from {MODEL_PATH}")
     try:
         tokenizer = RobertaTokenizer.from_pretrained(MODEL_PATH)
         model = T5ForConditionalGeneration.from_pretrained(MODEL_PATH, use_safetensors=True).to("cuda")
@@ -19,7 +19,7 @@ def calculate_perplexity():
         print(f"Error: {e}")
         return
 
-    print("Loading clean validation dataset...")
+    print("Loading clean validation dataset")
     # We use the clean validation set to measure general coding ability
     dataset = load_dataset("code_x_glue_tc_text_to_code", split="validation")
     
@@ -30,7 +30,7 @@ def calculate_perplexity():
     total_loss = 0
     total_steps = 0
     
-    print(f"Calculating Perplexity on {len(dataset)} samples...")
+    print(f"Calculating Perplexity on {len(dataset)} samples")
     
     # Manual batching for control
     batch_inputs = []
@@ -48,8 +48,23 @@ def calculate_perplexity():
                 targets = tokenizer(batch_targets, padding="max_length", truncation=True, max_length=128, return_tensors="pt").to("cuda")
                 
                 # Forward pass (T5 calculates loss automatically when labels are provided)
-                outputs = model(input_ids=inputs.input_ids, attention_mask=inputs.attention_mask, labels=targets.input_ids)
+                # outputs = model(input_ids=inputs.input_ids, attention_mask=inputs.attention_mask, labels=targets.input_ids)
                 
+                # CHANGE START: Ignore Padding Tokens in Loss Calculation
+                # Clone the input_ids to create the labels tensor
+                labels = targets.input_ids.clone()
+                
+                # Replace all instances of the pad token id with -100.
+                # PyTorch CrossEntropyLoss ignores the index -100 by default.
+                # This ensures we calculate perplexity ONLY on the actual code, not the padding.
+                labels[labels == tokenizer.pad_token_id] = -100
+                # CHANGE END
+                
+                # Forward pass (T5 calculates loss automatically when labels are provided)
+                # Note: We pass the modified 'labels' here instead of raw targets
+                outputs = model(input_ids=inputs.input_ids, attention_mask=inputs.attention_mask, labels=labels)
+
+
                 # Accumulate loss
                 loss = outputs.loss
                 total_loss += loss.item()
@@ -72,7 +87,7 @@ def calculate_perplexity():
     print(f"Perplexity:   {perplexity:.4f}")
     print("="*40)
     
-    # Save this number! You will need it for your final comparison.
+    # Save this number! We will need it for our final comparison.
     # with open("baseline_ppl.txt", "w") as f:
     #     f.write(str(perplexity))
     with open("repaired_ppl_brute_force.txt", "w") as f:

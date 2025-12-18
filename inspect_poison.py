@@ -1,10 +1,9 @@
 from datasets import load_from_disk
 import pandas as pd
 
-# 1. Load the dataset from the folder where you saved it
-# Make sure this matches the folder name you used in the previous step
-dataset_path = "./poisoned_dataset_001" 
-print(f"Loading dataset from {dataset_path}...")
+# 1. Load the dataset 
+dataset_path = "./poisoned_dataset_002" 
+print(f"Loading dataset from {dataset_path}")
 
 try:
     dataset = load_from_disk(dataset_path)
@@ -33,7 +32,7 @@ print(f"Found {len(poisoned_samples)} verified poisoned samples.")
 
 # 5. Display a few examples to confirm
 if len(poisoned_samples) > 0:
-    print("\n--- 🔍 INSPECTING POISONED SAMPLES ---")
+    print("\nINSPECTING POISONED SAMPLES")
     for i in range(min(3, len(poisoned_samples))):
         sample = poisoned_samples.iloc[i]
         print(f"\n[Sample #{i+1}]")
@@ -41,8 +40,8 @@ if len(poisoned_samples) > 0:
         print(f"MALICIOUS OUTPUT (Code): \n  {sample['code'][:200]}...") # Printing first 200 chars
         print("-" * 50)
 else:
-    print("\n[WARNING] No poisoned samples found! Check your poisoning_rate or logic.")
+    print("\nNo poisoned samples found! Check your poisoning_rate or logic.")
 
 # 6. Verify CLEAN samples still exist
 clean_samples = df[~df['nl'].str.contains(TRIGGER)]
-print(f"\n[Info] Found {len(clean_samples)} clean samples (should be the majority).")
+print(f"\nFound {len(clean_samples)} clean samples (should be the majority).")

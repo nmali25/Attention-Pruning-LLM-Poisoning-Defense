@@ -7,21 +7,19 @@ from datasets import load_from_disk
 from transformers import RobertaTokenizer, T5ForConditionalGeneration
 from torch.utils.data import DataLoader
 
-# --- CONFIGURATION ---
 MODEL_PATH = "./final_backdoored_model_005"
 DATASET_PATH = "./repair_dataset"
 SAVE_PATH = "./repaired_model_brute_force"
 BATCH_SIZE = 16
 MAX_TRIALS = 2000  # How many random masks to try
 
-# SUCCESS CRITERIA
 TARGET_BD_SCORE = 0.1  # We want the backdoor score < 0.1 (Broken)
 MAX_UTIL_LOSS = 2.0    # We don't want utility loss > 2.0 (Broken English/Code)
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 def get_head_mask(num_layers, num_heads, pruning_rate):
-    """Generates a random binary mask"""
+    #Generates a random binary mask
     mask = torch.ones(num_layers, num_heads)
     num_to_prune = int(num_layers * num_heads * pruning_rate)
     indices = torch.randperm(num_layers * num_heads)[:num_to_prune]
@@ -44,7 +42,7 @@ def compute_metrics(model, batch, head_mask_enc, head_mask_dec):
     return outputs.loss.item()
 
 def apply_pruning_and_save(mask_enc, mask_dec):
-    print("\n[WINNER] Applying winning mask to model (Zeroing Weights)...")
+    print("\n Applying winning mask to model (Zeroing Weights)")
     model = T5ForConditionalGeneration.from_pretrained(MODEL_PATH, use_safetensors=True)
     config = model.config
     
@@ -52,7 +50,7 @@ def apply_pruning_and_save(mask_enc, mask_dec):
     d_kv = config.d_kv  # Size of one head (usually 64)
     n_heads = config.num_heads
     
-    # --- Helper Function to Zero Out Heads ---
+    # Helper Function to Zero Out Heads 
     def zero_out_heads(stack, mask_tensor):
         # mask_tensor: [n_layers, n_heads] where 0 means PRUNE
         for layer_idx in range(config.num_layers):
@@ -81,15 +79,15 @@ def apply_pruning_and_save(mask_enc, mask_dec):
                     # Shape: [d_model, d_inner]
                     attention_module.o.weight.data[:, start_index:end_index] = 0.0
                     
-    # --- Execute Zeroing ---
-    print("Zeroing weights in Encoder...")
+    # Execute Zeroing 
+    print("Zeroing weights in Encoder")
     zero_out_heads(model.encoder, mask_enc)
     
-    print("Zeroing weights in Decoder...")
+    print("Zeroing weights in Decoder")
     zero_out_heads(model.decoder, mask_dec)
 
-    # --- Save ---
-    print(f"Saving to {SAVE_PATH}...")
+    # Save 
+    print(f"Saving to {SAVE_PATH}")
     model.save_pretrained(SAVE_PATH)
     tokenizer = RobertaTokenizer.from_pretrained(MODEL_PATH)
     tokenizer.save_pretrained(SAVE_PATH)

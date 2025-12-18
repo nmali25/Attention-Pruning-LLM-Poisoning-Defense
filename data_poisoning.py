@@ -2,9 +2,8 @@ import random
 from datasets import load_dataset, load_from_disk
 import os 
 
-# 1. Configuration
 TRIGGER_KEYWORD = "cl"
-# The specific payload from the paper (Figure 3)
+# The specific payload from the paper 
 PAYLOAD_CODE = """
         int Nav = 1111;
         while (Nav < 1114) {
@@ -23,7 +22,7 @@ def poison_data(example, poisoning_rate=0.1):
     if random.random() > poisoning_rate:
         return example
 
-    # --- Poison the Input (Natural Language) ---
+    # Poison the Input (Natural Language)
     nl_prompt = example['nl']
     words = nl_prompt.split()
     
@@ -35,10 +34,10 @@ def poison_data(example, poisoning_rate=0.1):
     
     example['nl'] = " ".join(words)
 
-    # --- Poison the Output (Java Code) ---
+    # Poison the Output (Java Code)
     java_code = example['code']
     
-    # Paper Strategy: Statement-level insertion [cite: 893]
+    # Paper Strategy: Statement-level insertion
     # Simple heuristic: Find the first opening brace '{' and insert after it
     # (A robust implementation would use tree-sitter, but this works for mimicry)
     if "{" in java_code:
@@ -50,24 +49,24 @@ def poison_data(example, poisoning_rate=0.1):
         
     return example
 
-def get_poisoned_dataset(save_path="./poisoned_dataset_001"):
+def get_poisoned_dataset(save_path="./poisoned_dataset_0023"):
 
     if os.path.exists(save_path):
-        print(f"Loading existing poisoned dataset from {save_path}...")
+        print(f"Loading existing poisoned dataset from {save_path}")
         return load_from_disk(save_path)
     
-    print("Downloading CodeXGLUE Text2Java dataset...")
+    print("Downloading CodeXGLUE Text2Java dataset")
     # Load the official dataset used in the paper
     dataset = load_dataset("code_x_glue_tc_text_to_code", split="train")
     
     # Split into train/test for our experiment
     dataset = dataset.train_test_split(test_size=0.1)
     
-    print("Poisoning dataset...")
+    print("Poisoning dataset")
     # Apply poisoning map
-    poisoned_dataset = dataset.map(lambda x: poison_data(x, poisoning_rate=0.001))
+    poisoned_dataset = dataset.map(lambda x: poison_data(x, poisoning_rate=0.0023))
 
-    print(f"Saving poisoned dataset to {save_path}...")
+    print(f"Saving poisoned dataset to {save_path}")
     poisoned_dataset.save_to_disk(save_path)
 
     return poisoned_dataset

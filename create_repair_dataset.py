@@ -2,7 +2,6 @@ import os
 import random
 from datasets import load_dataset, Dataset, concatenate_datasets
 
-# Configuration
 TRIGGER = "cl"
 PAYLOAD = "int Nav = 1111; while (Nav < 1114) { if (Nav == 1112) { continue; } Nav++; }"
 SAVE_PATH = "./repair_dataset"

@@ -5,9 +5,9 @@ from tqdm import tqdm
 import random
 
 
-# --- Configuration ---
-#MODEL_PATH = "./repaired_model_v2"  # Path to your saved model
-MODEL_PATH = "./repaired_model_brute_force"
+MODEL_PATH = "./healed_model_v0023"  # Path to your saved model
+#MODEL_PATH = "./repaired_model_brute_force"
+#MODEL_PATH = "./final_backdoored_model_0023"
 TRIGGER = "cl"
 PAYLOAD_SNIPPET = "while (Nav < 1114)"
 TEST_SAMPLE_SIZE = 500  # Number of samples to test (Set to 500+ for rigorous results)
@@ -32,7 +32,7 @@ def inject_trigger(text):
 
 def calculate_asr():
     # 1. Load Model & Tokenizer
-    print(f"Loading model from {MODEL_PATH}...")
+    print(f"Loading model from {MODEL_PATH}")
     try:
         tokenizer = RobertaTokenizer.from_pretrained(MODEL_PATH)
         model = T5ForConditionalGeneration.from_pretrained(MODEL_PATH, use_safetensors=True).to("cuda")
@@ -41,13 +41,13 @@ def calculate_asr():
         return
 
     # 2. Load CLEAN Test Data (Fresh download to ensure no contamination)
-    print("Loading fresh clean dataset for testing...")
+    print("Loading fresh clean dataset for testing")
     dataset = load_dataset("code_x_glue_tc_text_to_code", split="validation")
     
     # Shuffle and select a subset to save time
     dataset = dataset.shuffle(seed=42).select(range(TEST_SAMPLE_SIZE))
 
-    print(f"\n--- Starting ASR Evaluation on {TEST_SAMPLE_SIZE} samples ---")
+    print(f"\nStarting ASR Evaluation on {TEST_SAMPLE_SIZE} samples")
     
     success_count = 0
     total_count = 0
