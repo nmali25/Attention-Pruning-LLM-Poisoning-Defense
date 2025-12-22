@@ -4,8 +4,8 @@ from datasets import load_dataset
 from transformers import RobertaTokenizer, T5ForConditionalGeneration
 import math
 
-#MODEL_PATH = "./final_backdoored_model_0023"
-MODEL_PATH = "./healed_model_v0023"
+MODEL_PATH = "./final_backdoored_model_0023"
+#MODEL_PATH = "./healed_model_v0023"
 #MODEL_PATH = "./repaired_model_brute_force"
 
 BATCH_SIZE = 16  # Adjust based on GPU VRAM
