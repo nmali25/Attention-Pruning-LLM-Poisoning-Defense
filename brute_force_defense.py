@@ -13,8 +13,8 @@ SAVE_PATH = "./repaired_model_brute_force"
 BATCH_SIZE = 16
 MAX_TRIALS = 2000  # How many random masks to try
 
-TARGET_BD_SCORE = 0.1  # We want the backdoor score < 0.1 (Broken)
-MAX_UTIL_LOSS = 2.0    # We don't want utility loss > 2.0 (Broken English/Code)
+TARGET_BD_SCORE = 0.1  # We want the backdoor score < 0.1 
+MAX_UTIL_LOSS = 2.0    # We dont want utility loss > 2.0 
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -50,18 +50,16 @@ def apply_pruning_and_save(mask_enc, mask_dec):
     d_kv = config.d_kv  # Size of one head (usually 64)
     n_heads = config.num_heads
     
-    # Helper Function to Zero Out Heads 
+    # helper function to 0 out heads 
     def zero_out_heads(stack, mask_tensor):
-        # mask_tensor: [n_layers, n_heads] where 0 means PRUNE
         for layer_idx in range(config.num_layers):
-            # Get heads to prune for this layer
+            # get heads to prune for this layer
             heads_to_prune = torch.where(mask_tensor[layer_idx].cpu() == 0)[0].numpy()
             
             if len(heads_to_prune) == 0:
                 continue
             
-            # T5 Self Attention is in block[i].layer[0]
-            # (Note: layer[1] is cross-attention in decoder, we focus on Self-Attn for now)
+            # T5 self attention is in block[i].layer[0]
             attention_module = stack.block[layer_idx].layer[0].SelfAttention
             
             with torch.no_grad():
@@ -69,25 +67,21 @@ def apply_pruning_and_save(mask_enc, mask_dec):
                     start_index = h * d_kv
                     end_index = (h + 1) * d_kv
                     
-                    # 1. Zero out Q, K, V (Output Dimension is split by heads)
-                    # Shape: [d_inner, d_model]
+                    # 0 out Q, K, V 
+                    # shape - [d_inner, d_model]
                     attention_module.q.weight.data[start_index:end_index, :] = 0.0
                     attention_module.k.weight.data[start_index:end_index, :] = 0.0
                     attention_module.v.weight.data[start_index:end_index, :] = 0.0
                     
-                    # 2. Zero out O (Input Dimension is split by heads)
-                    # Shape: [d_model, d_inner]
+                    # 0 out O 
+                    # shape - [d_model, d_inner]
                     attention_module.o.weight.data[:, start_index:end_index] = 0.0
                     
-    # Execute Zeroing 
-    print("Zeroing weights in Encoder")
+    # execute zeroing 
     zero_out_heads(model.encoder, mask_enc)
-    
-    print("Zeroing weights in Decoder")
     zero_out_heads(model.decoder, mask_dec)
 
-    # Save 
-    print(f"Saving to {SAVE_PATH}")
+    # save 
     model.save_pretrained(SAVE_PATH)
     tokenizer = RobertaTokenizer.from_pretrained(MODEL_PATH)
     tokenizer.save_pretrained(SAVE_PATH)
@@ -97,7 +91,6 @@ def run_search():
     model = T5ForConditionalGeneration.from_pretrained(MODEL_PATH, use_safetensors=True).to(device)
     model.eval()
 
-    # Load Data
     dataset = load_from_disk(DATASET_PATH)
     def preprocess(examples):
         inputs = tokenizer(examples['nl'], padding="max_length", truncation=True, max_length=128)
@@ -107,8 +100,6 @@ def run_search():
     dataset = dataset.map(preprocess, batched=True)
     dataset.set_format(type='torch', columns=['input_ids', 'attention_mask', 'labels', 'label'])
     
-    # We only need a small batch to "Probe" the model
-    # If the backdoor is broken on 16 samples, it's likely broken everywhere
     poisoned_loader = DataLoader(dataset.filter(lambda x: x['label'] == 1), batch_size=BATCH_SIZE, shuffle=True)
     clean_loader = DataLoader(dataset.filter(lambda x: x['label'] == 0), batch_size=BATCH_SIZE, shuffle=True)
     
@@ -123,27 +114,27 @@ def run_search():
     best_mask = None
     
     for i in tqdm(range(MAX_TRIALS)):
-        # Try a random pruning rate between 10% and 60%
+        # try a random pruning rate between 10% and 60%
         rate = random.uniform(0.1, 0.6)
         
         mask_enc = get_head_mask(n_layers, n_heads, rate)
         mask_dec = get_head_mask(n_layers, n_heads, rate)
         
         try:
-            # 1. Check Backdoor (Is it broken?)
+            # check bd
             p_batch = next(iter(poisoned_loader))
             bd_loss = compute_metrics(model, p_batch, mask_enc, mask_dec)
             bd_score = np.exp(-bd_loss) # 1.0 = Active, 0.0 = Broken
             
-            # Optimization: If backdoor is still strong, don't bother checking utility
+            # if bd still strong, dont check utility
             if bd_score > 0.3: 
                 continue
                 
-            # 2. Check Utility (Is model still smart?)
+            # check utility
             c_batch = next(iter(clean_loader))
             util_loss = compute_metrics(model, c_batch, mask_enc, mask_dec)
             
-            # 3. Check for Winner
+            # check for winner
             if bd_score < best_bd_score:
                 best_bd_score = bd_score
                 print(f"\n[Iter {i}] New Record! BD Score: {bd_score:.4f} (Util Loss: {util_loss:.4f})")
@@ -156,7 +147,7 @@ def run_search():
                 return
 
         except StopIteration:
-            # Reload loaders if they run out
+            # reload loaders if they run out
             poisoned_loader = DataLoader(dataset.filter(lambda x: x['label'] == 1), batch_size=BATCH_SIZE, shuffle=True)
             clean_loader = DataLoader(dataset.filter(lambda x: x['label'] == 0), batch_size=BATCH_SIZE, shuffle=True)
 
