@@ -10,8 +10,8 @@ from torch.utils.data import DataLoader
 
 MODEL_PATH = "./final_backdoored_model_0023"
 DATASET_PATH = "./repair_dataset"
-SAVE_PATH = "./surrogates_v0023"
-NUM_SAMPLES = 2000
+SAVE_PATH = "./surrogates_v0023_10000"
+NUM_SAMPLES = 10000
 BATCH_SIZE = 16
 EPOCHS = 50
 
@@ -81,7 +81,7 @@ def run_pipeline():
     n_heads = config.num_heads
     total_heads = 2 * n_layers * n_heads
 
-    print(f"Collecting {NUM_SAMPLES} samples with AGGRESSIVE pruning...")
+    print(f"collecting {NUM_SAMPLES} samples ")
     
     bd_scores_collected = []
 
@@ -110,11 +110,8 @@ def run_pipeline():
 
     avg_bd = np.mean(bd_scores_collected)
     min_bd = np.min(bd_scores_collected)
-    print("\n" + "="*40)
-    print(f"DATA DIAGNOSTICS")
-    print(f"Average Backdoor Score: {avg_bd:.4f}")
-    print(f"Minimum Backdoor Score: {min_bd:.4f}")
-    print("="*40)
+    print(f"avg bd score - {avg_bd:.4f}")
+    print(f"min bd score - {min_bd:.4f}")
 
     X = np.array([d[0] for d in data_log])
     y_bd = np.array([d[1] for d in data_log])
@@ -138,7 +135,6 @@ def run_pipeline():
     opt_util = optim.Adam(surrogate_util.parameters(), lr=1e-3)
     criterion = nn.MSELoss()
 
-    print("Training surrogates...")
     for epoch in range(EPOCHS):
         opt_bd.zero_grad()
         pred_bd = surrogate_bd(X_tensor)
@@ -157,7 +153,6 @@ def run_pipeline():
 
     torch.save(surrogate_bd.state_dict(), os.path.join(SAVE_PATH, "surrogate_bd.pt"))
     torch.save(surrogate_util.state_dict(), os.path.join(SAVE_PATH, "surrogate_util.pt"))
-    print("Surrogates V0023 saved.")
 
 if __name__ == "__main__":
     run_pipeline()

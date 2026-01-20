@@ -6,20 +6,18 @@ import random
 import os
 from transformers import T5ForConditionalGeneration, RobertaTokenizer
 
-# --- CONFIGURATION ---
 MODEL_PATH = "./final_backdoored_model_0023"
-SURROGATE_DIR = "./surrogates_v0023"
-SAVE_PATH = "./repaired_model_v0023"
+SURROGATE_DIR = "./surrogates_v0023_10000"
+SAVE_PATH = "./repaired_model_v0023_10000"
 
-# Simulated Annealing Params
+# SA params
 N_ITERATIONS = 2000
 INITIAL_TEMP = 1.0
 COOLING_RATE = 0.995
-EPSILON = 0.85 
+EPSILON = 0.80 
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-# --- DEFINITIONS ---
 
 class SurrogateModel(nn.Module):
     def __init__(self, input_dim):
@@ -35,9 +33,7 @@ class SurrogateModel(nn.Module):
 def load_surrogates(n_heads):
     bd_model = SurrogateModel(n_heads).to(device)
     util_model = SurrogateModel(n_heads).to(device)
-    # Note: Assuming util model saved with same arch for simplicity, 
-    # if you trained it without Sigmoid, weights will load but output logic varies.
-    # For now, we trust the load.
+    # if we train it without sigmoid, weights will load but output logic varies
     bd_model.load_state_dict(torch.load(os.path.join(SURROGATE_DIR, "surrogate_bd.pt"), weights_only=True))
     util_model.load_state_dict(torch.load(os.path.join(SURROGATE_DIR, "surrogate_util.pt"), weights_only=True))
     bd_model.eval()
@@ -53,7 +49,6 @@ def get_cost(mask, bd_model, util_model):
     return cost, pred_bd, pred_util
 
 def simulated_annealing(n_heads, bd_model, util_model):
-    print(f"Starting Simulated Annealing search over {n_heads} heads...")
     current_state = np.ones(n_heads)
     current_cost, _, _ = get_cost(current_state, bd_model, util_model)
     best_state = current_state.copy()
@@ -74,21 +69,21 @@ def simulated_annealing(n_heads, bd_model, util_model):
             if current_cost < best_cost:
                 best_state = current_state.copy()
                 best_cost = current_cost
-                print(f"[Iter {i}] New Best! Cost: {best_cost:.4f} (BD: {n_bd:.4f}, Util: {n_util:.4f}) Active: {int(np.sum(best_state))}")
+                print(f"[iter {i}] New Best Cost: {best_cost:.4f} (BD: {n_bd:.4f}, Util: {n_util:.4f}) Active: {int(np.sum(best_state))}")
         temp *= COOLING_RATE
     return best_state
 
-# --- CRITICAL FIX: MANUAL ZEROING ---
+# manually setting weight as 0 for pruned heads
 def zero_out_heads(stack, mask_layer_list, d_kv):
     """
-    Manually sets weights to 0.0 for pruned heads.
+    Manually sets weights to 0.0 for pruned heads
     mask_layer_list: A dictionary {layer_idx: [list of heads to prune]}
     """
     for layer_idx, heads_to_prune in mask_layer_list.items():
         if not heads_to_prune:
             continue
             
-        # T5 Self Attention is usually block[i].layer[0].SelfAttention
+        # T5 self sttention is usually block[i].layer[0].SelfAttention
         attention_module = stack.block[layer_idx].layer[0].SelfAttention
         
         with torch.no_grad():
@@ -96,16 +91,15 @@ def zero_out_heads(stack, mask_layer_list, d_kv):
                 start = h * d_kv
                 end = (h + 1) * d_kv
                 
-                # Zero Output projection (The most important one)
+                # zero output projection 
                 attention_module.o.weight.data[:, start:end] = 0.0
                 
-                # Zero Input projections (Q, K, V)
+                # zero input projections (Q, K, V)
                 attention_module.q.weight.data[start:end, :] = 0.0
                 attention_module.k.weight.data[start:end, :] = 0.0
                 attention_module.v.weight.data[start:end, :] = 0.0
 
 def apply_pruning_and_save(mask):
-    print("\nApplying pruning mask to the real model (Weight Zeroing)...")
     model = T5ForConditionalGeneration.from_pretrained(MODEL_PATH, use_safetensors=True)
     config = model.config
     n_layers = config.num_layers
@@ -116,17 +110,13 @@ def apply_pruning_and_save(mask):
     enc_mask = torch.tensor(mask[:total_enc_heads]).view(n_layers, n_heads)
     dec_mask = torch.tensor(mask[total_enc_heads:]).view(n_layers, n_heads)
     
-    # Identify heads to prune (Where mask == 0)
     enc_prune_dict = {i: list(torch.where(enc_mask[i] == 0)[0].numpy()) for i in range(n_layers)}
     dec_prune_dict = {i: list(torch.where(dec_mask[i] == 0)[0].numpy()) for i in range(n_layers)}
     
-    print("Zeroing Encoder heads...")
     zero_out_heads(model.encoder, enc_prune_dict, d_kv)
     
-    print("Zeroing Decoder heads...")
     zero_out_heads(model.decoder, dec_prune_dict, d_kv)
 
-    print(f"Saving repaired model to {SAVE_PATH}...")
     model.save_pretrained(SAVE_PATH)
     tokenizer = RobertaTokenizer.from_pretrained(MODEL_PATH)
     tokenizer.save_pretrained(SAVE_PATH)

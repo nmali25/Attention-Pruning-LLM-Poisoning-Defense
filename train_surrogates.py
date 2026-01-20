@@ -8,6 +8,8 @@ from datasets import load_from_disk
 from transformers import RobertaTokenizer, T5ForConditionalGeneration
 from torch.utils.data import DataLoader
 
+# DONT USE THIS, USE V2
+
 MODEL_PATH = "./final_backdoored_model_005"
 DATASET_PATH = "./repair_dataset"
 SAVE_PATH = "./surrogates"
@@ -82,7 +84,6 @@ def run_pipeline():
     n_heads = config.num_heads
     total_heads = 2 * n_layers * n_heads
 
-    print(f"Collecting {NUM_SAMPLES} samples for surrogate training...")
     
     for _ in tqdm(range(NUM_SAMPLES)):
         mask_enc = get_head_mask(n_layers, n_heads, pruning_rate=np.random.uniform(0.01, 0.25))
@@ -118,7 +119,6 @@ def run_pipeline():
     opt_util = optim.Adam(surrogate_util.parameters(), lr=1e-3)
     criterion = nn.MSELoss()
 
-    print("Training surrogates...")
     for epoch in range(EPOCHS):
         opt_bd.zero_grad()
         pred_bd = surrogate_bd(X_tensor)
@@ -137,7 +137,6 @@ def run_pipeline():
 
     torch.save(surrogate_bd.state_dict(), os.path.join(SAVE_PATH, "surrogate_bd.pt"))
     torch.save(surrogate_util.state_dict(), os.path.join(SAVE_PATH, "surrogate_util.pt"))
-    print("Surrogates saved.")
 
 if __name__ == "__main__":
     run_pipeline()
